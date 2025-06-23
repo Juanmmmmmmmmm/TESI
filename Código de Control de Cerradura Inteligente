@@ -1,0 +1,188 @@
+// Matriz de teclas
+char teclas[4][4] = {
+  {'1', '2', '3', 'A'},
+  {'4', '5', '6', 'B'},
+  {'7', '8', '9', 'C'},
+  {'*', '0', '#', 'D'}
+};
+
+// Pines de filas (salida)
+int filas[4] = {2, 3, 4, 5};
+// Pines de columnas (entrada)
+int columnas[4] = {6, 7, 8, 9};
+
+// Pines LED y buzzer
+const int buzzer = 10;
+const int ledRojo = 11;
+const int ledVerde = 12;
+const int ledAmarillo = 13;
+
+// Pines del motor paso a paso (28BYJ-48 + ULN2003)
+const int motorPins[4] = {A4, A5, A0, A1};
+
+// Clave de 4 dígitos
+int clave[] = {1, 1, 1, 1};
+int entrada[4];
+int indice = 0;
+
+bool estaAbierto = false; // Estado del motor: cerrado por defecto
+
+// Secuencia de pasos (8 pasos)
+const int stepSequence[8][4] = {
+  {1, 0, 0, 0},
+  {1, 1, 0, 0},
+  {0, 1, 0, 0},
+  {0, 1, 1, 0},
+  {0, 0, 1, 0},
+  {0, 0, 1, 1},
+  {0, 0, 0, 1},
+  {1, 0, 0, 1}
+};
+
+int currentStep = 0;
+
+void setup() {
+  Serial.begin(9600); // Monitor Serial
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(filas[i], OUTPUT);
+    pinMode(columnas[i], INPUT_PULLUP);
+  }
+
+  pinMode(ledRojo, OUTPUT);
+  pinMode(ledVerde, OUTPUT);
+  pinMode(ledAmarillo, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(motorPins[i], OUTPUT);
+  }
+
+  digitalWrite(ledAmarillo, HIGH); // Esperando clave
+}
+
+void loop() {
+  char tecla = leerTecla();
+
+  if (tecla != '\0') {
+    Serial.print("Tecla presionada: ");
+    Serial.println(tecla);
+
+    if (isdigit(tecla)) {
+      entrada[indice] = tecla - '0';
+      indice++;
+    } else if (tecla == 'D') {
+      if (estaAbierto) {
+        cerrarMotor();   // Regresa a posición cerrada
+        resetSistema();
+      } else {
+        resetSistema();  // Solo reinicia sin cerrar
+      }
+    }
+
+    if (indice == 4) {
+      verificarClave();
+      indice = 0;
+    }
+  }
+}
+
+char leerTecla() {
+  for (int f = 0; f < 4; f++) {
+    digitalWrite(filas[f], LOW);
+
+    for (int c = 0; c < 4; c++) {
+      if (digitalRead(columnas[c]) == LOW) {
+        delay(150);  // Antirrebote
+        while (digitalRead(columnas[c]) == LOW);
+        digitalWrite(filas[f], HIGH);
+        return teclas[f][c];
+      }
+    }
+
+    digitalWrite(filas[f], HIGH);
+  }
+
+  return '\0';
+}
+
+void verificarClave() {
+  bool correcta = true;
+  for (int i = 0; i < 4; i++) {
+    if (entrada[i] != clave[i]) {
+      correcta = false;
+      break;
+    }
+  }
+
+  if (correcta && !estaAbierto) {
+    digitalWrite(ledVerde, HIGH);
+    digitalWrite(ledRojo, LOW);
+    digitalWrite(ledAmarillo, LOW);
+    tonoExito();
+    moverMotor(); // Abre
+    estaAbierto = true;
+  } else {
+    digitalWrite(ledRojo, HIGH);
+    digitalWrite(ledVerde, LOW);
+    tonoError();
+  }
+}
+
+void moverMotor() {
+  for (int i = 0; i < 1550; i++) {
+    stepMotor(1); // Gira hacia abrir
+    delay(2);
+  }
+}
+
+void cerrarMotor() {
+  for (int i = 0; i < 1550; i++) {
+    stepMotor(-1); // Gira hacia cerrar
+    delay(2);
+  }
+  estaAbierto = false;
+}
+
+void stepMotor(int direction) {
+  currentStep += direction;
+  if (currentStep > 7) currentStep = 0;
+  if (currentStep < 0) currentStep = 7;
+
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(motorPins[i], stepSequence[currentStep][i]);
+  }
+}
+
+void resetSistema() {
+  digitalWrite(ledRojo, LOW);
+  digitalWrite(ledVerde, LOW);
+  digitalWrite(ledAmarillo, HIGH);
+  indice = 0;
+  tonoReinicio();
+  Serial.println("Sistema reiniciado por tecla D");
+}
+
+void tonoError() {
+  tone(buzzer, 300, 200);
+  delay(200);
+  tone(buzzer, 200, 400);
+  delay(400);
+  noTone(buzzer);
+}
+
+void tonoExito() {
+  tone(buzzer, 988, 110);
+  delay(110);
+  tone(buzzer, 1319, 110);
+  delay(110);
+  noTone(buzzer);
+}
+
+void tonoReinicio() {
+  tone(buzzer, 500, 100);
+  delay(120);
+  tone(buzzer, 800, 100);
+  delay(120);
+  noTone(buzzer);
+}
