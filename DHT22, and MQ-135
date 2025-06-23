@@ -1,0 +1,103 @@
+#include <DHT.h>       // Librería para el sensor DHT22
+#include <LiquidCrystal_I2C.h> // Librería para LCD I2C (ajustar si es sin I2C)
+
+// Definiciones de pines
+#define DHTPIN 2       // Pin donde está conectado el sensor DHT22
+#define MQ135PIN 4     // Pin analógico donde está conectado el sensor MQ-135
+
+#define LED_ROJO 9     // Pin para el LED Rojo
+#define LED_AMARILLO 10 // Pin para el LED Amarillo
+#define LED_VERDE 11   // Pin para el LED Verde
+
+#define DHTTYPE DHT22  // Tipo de sensor DHT (DHT11, DHT22)
+
+DHT dht(DHTPIN, DHTTYPE); // Inicializa el sensor DHT
+
+// Inicializa el objeto LCD (ajustar la dirección I2C y las dimensiones si es necesario)
+// Por ejemplo, para una LCD 16x2 con dirección 0x27:
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  Serial.begin(9600); // Inicia la comunicación serial para depuración
+  dht.begin();        // Inicia el sensor DHT
+
+  lcd.init();      // Inicializa el LCD
+  lcd.backlight(); // Enciende la luz de fondo del LCD
+
+  pinMode(LED_ROJO, OUTPUT);
+  pinMode(LED_AMARILLO, OUTPUT);
+  pinMode(LED_VERDE, OUTPUT);
+
+  // Mensaje de inicio en LCD
+  lcd.clear();
+  lcd.print("I'Gallo");
+  lcd.setCursor(0, 1);
+  lcd.print("Iniciando...");
+  delay(2000);
+}
+
+void loop() {
+  // Lectura del sensor DHT22
+  float h = dht.readHumidity();    // Lee la humedad
+  float t = dht.readTemperature(); // Lee la temperatura en Celsius
+
+  // Comprueba si alguna lectura falló (NaN)
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Error al leer del sensor DHT!");
+    lcd.clear();
+    lcd.print("Error DHT!");
+    delay(2000);
+    return;
+  }
+
+  // Lectura del sensor MQ-135 (es un valor analógico, requiere calibración)
+  int mq135_value = analogRead(MQ135PIN);
+
+  // Convertir el valor del MQ-135 a un porcentaje o escala de calidad de aire
+  // NOTA: Esto es una simplificación. Un sensor MQ-135 requiere una calibración
+  // más compleja para obtener valores precisos en PPM. Aquí se usa un mapeo simple.
+  int air_quality_percentage = map(mq135_value, 0, 1023, 0, 100); // 0% a 100%
+
+  // Imprimir en el monitor serial para depuración
+  Serial.print("Humedad: ");
+  Serial.print(h);
+  Serial.print(" %\t");
+  Serial.print("Temperatura: ");
+  Serial.print(t);
+  Serial.print(" *C\t");
+  Serial.print("MQ-135 (Crudo): ");
+  Serial.print(mq135_value);
+  Serial.print("\tCalidad Aire: ");
+  Serial.print(air_quality_percentage);
+  Serial.println(" %");
+
+  // Mostrar en LCD
+  lcd.clear();
+  lcd.print("Temp:");
+  lcd.print(t);
+  lcd.print("C Hum:");
+  lcd.print(h);
+  lcd.print("%");
+  lcd.setCursor(0, 1); // Mover a la segunda línea
+  lcd.print("Aire:");
+  lcd.print(air_quality_percentage);
+  lcd.print("% "); // Espacio para limpiar cualquier dígito anterior
+
+  // Control de LEDs basado en la calidad del aire (ejemplo)
+  // Define tus umbrales aquí
+  if (air_quality_percentage < 30) { // Buena calidad del aire
+    digitalWrite(LED_VERDE, HIGH);
+    digitalWrite(LED_AMARILLO, LOW);
+    digitalWrite(LED_ROJO, LOW);
+  } else if (air_quality_percentage >= 30 && air_quality_percentage < 60) { // Calidad del aire moderada
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_AMARILLO, HIGH);
+    digitalWrite(LED_ROJO, LOW);
+  } else { // Mala calidad del aire
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_AMARILLO, LOW);
+    digitalWrite(LED_ROJO, HIGH);
+  }
+
+  delay(2000); // Espera 2 segundos antes de la siguiente lectura
+}
